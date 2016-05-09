@@ -2,6 +2,9 @@
 
 This is a port of OptionParser from CRuby.
 
+See [optparse.rb.diff](optparse.rb.diff) for the diff from CRuby's optparse
+(from Ruby 2.3.1-ish) to this port.
+
 ## License
 
 Copyright (C) Yukihiro Matsumoto. All rights reserved.

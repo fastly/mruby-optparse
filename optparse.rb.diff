@@ -1,0 +1,444 @@
+--- cruby/optparse.rb	2016-04-20 16:30:09.000000000 -0700
++++ mrblib/optparse.rb	2016-05-05 16:50:50.000000000 -0700
+@@ -393,9 +393,9 @@
+ #
+ class OptionParser
+   # :stopdoc:
+-  NoArgument = [NO_ARGUMENT = :NONE, nil].freeze
+-  RequiredArgument = [REQUIRED_ARGUMENT = :REQUIRED, true].freeze
+-  OptionalArgument = [OPTIONAL_ARGUMENT = :OPTIONAL, false].freeze
++  NoArgument = [NO_ARGUMENT = :NONE, nil]
++  RequiredArgument = [REQUIRED_ARGUMENT = :REQUIRED, true]
++  OptionalArgument = [OPTIONAL_ARGUMENT = :OPTIONAL, false]
+   # :startdoc:
+ 
+   #
+@@ -404,7 +404,8 @@
+   #
+   module Completion
+     def self.regexp(key, icase)
+-      Regexp.new('\A' + Regexp.quote(key).gsub(/\w+\b/, '\&\w*'), icase)
++      icase = nil if icase == false
++      Regexp.new('\A' + Regexp.quote(key).gsub(/(\w+\b)/, '\1\w*'), icase)
+     end
+ 
+     def self.candidate(key, icase = false, pat = nil, &block)
+@@ -415,7 +416,7 @@
+            kn = nil
+            k === key
+          else
+-           kn = defined?(k.id2name) ? k.id2name : k
++           kn = k.respond_to?(:to_s) ? k.to_s : k
+            pat === kn
+          end) or next
+         v << k if v.empty?
+@@ -425,14 +426,18 @@
+     end
+ 
+     def candidate(key, icase = false, pat = nil)
+-      Completion.candidate(key, icase, pat, &method(:each))
++      Completion.candidate(key, icase, pat) do |&b|
++        each(&b)
++      end
+     end
+ 
+     public
+-    def complete(key, icase = false, pat = nil)
+-      candidates = candidate(key, icase, pat, &method(:each)).sort_by {|k, v, kn| kn.size}
++    def complete(key, icase = false, pat = nil, &block)
++      candidates = candidate(key, icase, pat) do |&b|
++        each(&b)
++      end.sort_by {|k, v, kn| kn.size}
+       if candidates.size == 1
+-        canon, sw, * = candidates[0]
++        canon, sw, = candidates[0]
+       elsif candidates.size > 1
+         canon, sw, cn = candidates.shift
+         candidates.each do |k, v, kn|
+@@ -477,6 +482,12 @@
+   class Switch
+     attr_reader :pattern, :conv, :short, :long, :arg, :desc, :block
+ 
++    def self.>=(other)
++      return true if other == self
++      return false unless Class === other
++      return true if other.ancestors.include? self
++    end
++
+     #
+     # Guesses argument style from +arg+.  Returns corresponding
+     # OptionParser::Switch class (OptionalArgument, etc.).
+@@ -505,9 +516,19 @@
+       NilClass
+     end
+ 
++    # XXX: the block argument here is suspect.  Originally it was:
++    #
++    #   block = Proc.new
++    #
++    # Which in ruby allows you to pass in a block (which is captured via
++    # Proc.new in the block variable) or a pre-existing Method, Proc, or Lambda.
++    #
++    # On mruby Proc.new doesn't work that way and requires an explicit block
++    # so this may be broken for some uses.
+     def initialize(pattern = nil, conv = nil,
+                    short = nil, long = nil, arg = nil,
+-                   desc = ([] if short or long), block = Proc.new)
++                   desc = ([] if short or long), given_block = nil, &block)
++      block = given_block if given_block
+       raise if Array === pattern
+       @pattern, @conv, @short, @long, @arg, @desc, @block =
+         pattern, conv, short, long, arg, desc, block
+@@ -577,7 +598,7 @@
+         l = left[-1].length + s.length
+         l += arg.length if left.size == 1 && arg
+         l < max or sopts.empty? or left << ''
+-        left[-1] << (left[-1].empty? ? ' ' * 4 : ', ') << s
++        left[-1] << if left[-1].empty? then ' ' * 4 else ', ' end << s
+       end
+ 
+       if arg
+@@ -672,7 +693,10 @@
+           raise MissingArgument if argv.empty?
+           arg = argv.shift
+         end
+-        conv_arg(*parse_arg(arg, &method(:raise)))
++        parsed = parse_arg(arg) do |klass, message|
++          raise klass, message
++        end
++        conv_arg(*parsed)
+       end
+     end
+ 
+@@ -920,7 +944,6 @@
+   NoArgument.each {|el| ArgumentStyle[el] = Switch::NoArgument}
+   RequiredArgument.each {|el| ArgumentStyle[el] = Switch::RequiredArgument}
+   OptionalArgument.each {|el| ArgumentStyle[el] = Switch::OptionalArgument}
+-  ArgumentStyle.freeze
+ 
+   #
+   # Switches common used such as '--', and also provides default
+@@ -931,19 +954,18 @@
+   DefaultList.long[''] = Switch::NoArgument.new {throw :terminate}
+ 
+ 
+-  COMPSYS_HEADER = <<'XXX'      # :nodoc:
+-
++  COMPSYS_HEADER = "
+ typeset -A opt_args
+ local context state line
+ 
+ _arguments -s -S \
+-XXX
++"
+ 
+   def compsys(to, name = File.basename($0)) # :nodoc:
+     to << "#compdef #{name}\n"
+     to << COMPSYS_HEADER
+     visit(:compsys, {}, {}) {|o, d|
+-      to << %Q[  "#{o}[#{d.gsub(/[\"\[\]]/, '\\\\\&')}]" \\\n]
++      to << %Q[  "#{o}[#{d.gsub(/([\"\[\]])/, '\\\\\1')}]" \\\n]
+     }
+     to << "  '*:file:_files' && return 0\n"
+   end
+@@ -1351,7 +1373,9 @@
+       if (!(String === o || Symbol === o)) and o.respond_to?(:match)
+         pattern = notwice(o, pattern, 'pattern')
+         if pattern.respond_to?(:convert)
+-          conv = pattern.method(:convert).to_proc
++          conv = Proc.new do |*a|
++            pattern.convert(*a)
++          end
+         else
+           conv = SPLAT_PROC
+         end
+@@ -1360,14 +1384,16 @@
+ 
+       # anything others
+       case o
+-      when Proc, Method
++      when Proc
+         block = notwice(o, block, 'block')
+       when Array, Hash
+         case pattern
+         when CompletingHash
+         when nil
+           pattern = CompletingHash.new
+-          conv = pattern.method(:convert).to_proc if pattern.respond_to?(:convert)
++          conv = Proc.new do |*a|
++            pattern.convert(*a)
++          end if pattern.respond_to?(:convert)
+         else
+           raise ArgumentError, "argument pattern given twice"
+         end
+@@ -1508,18 +1534,17 @@
+   #
+   # Returns the rest of +argv+ left unparsed.
+   #
+-  def order(*argv, into: nil, &nonopt)
++  def order(*argv, &block)
+     argv = argv[0].dup if argv.size == 1 and Array === argv[0]
+-    order!(argv, into: into, &nonopt)
++    order!(argv, &block)
+   end
+ 
+   #
+   # Same as #order, but removes switches destructively.
+   # Non-option arguments remain in +argv+.
+   #
+-  def order!(argv = default_argv, into: nil, &nonopt)
+-    setter = ->(name, val) {into[name.to_sym] = val} if into
+-    parse_in_order(argv, setter, &nonopt)
++  def order!(argv = default_argv, &nonopt)
++    parse_in_order(argv, &nonopt)
+   end
+ 
+   def parse_in_order(argv = default_argv, setter = nil, &nonopt)  # :nodoc:
+@@ -1533,15 +1558,15 @@
+           opt, rest = $1, $2
+           begin
+             sw, = complete(:long, opt, true)
+-          rescue ParseError
+-            raise $!.set_option(arg, true)
++          rescue ParseError => e
++            raise e.set_option(arg, true)
+           end
+           begin
+             opt, cb, val = sw.parse(rest, argv) {|*exc| raise(*exc)}
+             val = cb.call(val) if cb
+             setter.call(sw.switch_name, val) if setter
+-          rescue ParseError
+-            raise $!.set_option(arg, rest)
++          rescue ParseError => e
++            raise e.set_option(arg, rest)
+           end
+ 
+         # short option
+@@ -1562,8 +1587,8 @@
+                 eq ||= !rest
+               end
+             end
+-          rescue ParseError
+-            raise $!.set_option(arg, true)
++          rescue ParseError => e
++            raise e.set_option(arg, true)
+           end
+           begin
+             opt, cb, val = sw.parse(val, argv) {|*exc| raise(*exc) if eq}
+@@ -1571,8 +1596,8 @@
+             argv.unshift(opt) if opt and (!rest or (opt = opt.sub(/\A-*/, '-')) != '-')
+             val = cb.call(val) if cb
+             setter.call(sw.switch_name, val) if setter
+-          rescue ParseError
+-            raise $!.set_option(arg, arg.length > 2)
++          rescue ParseError => e
++            raise e.set_option(arg, arg.length > 2)
+           end
+ 
+         # non-option argument
+@@ -1600,18 +1625,20 @@
+   # Parses command line arguments +argv+ in permutation mode and returns
+   # list of non-option arguments.
+   #
+-  def permute(*argv, into: nil)
++  def permute(*argv)
+     argv = argv[0].dup if argv.size == 1 and Array === argv[0]
+-    permute!(argv, into: into)
++    permute!(argv)
+   end
+ 
+   #
+   # Same as #permute, but removes switches destructively.
+   # Non-option arguments remain in +argv+.
+   #
+-  def permute!(argv = default_argv, into: nil)
++  def permute!(argv = default_argv)
+     nonopts = []
+-    order!(argv, into: into, &nonopts.method(:<<))
++    order!(argv) do |arg|
++      nonopts << arg
++    end
+     argv[0, 0] = nonopts
+     argv
+   end
+@@ -1620,20 +1647,20 @@
+   # Parses command line arguments +argv+ in order when environment variable
+   # POSIXLY_CORRECT is set, and in permutation mode otherwise.
+   #
+-  def parse(*argv, into: nil)
++  def parse(*argv)
+     argv = argv[0].dup if argv.size == 1 and Array === argv[0]
+-    parse!(argv, into: into)
++    parse!(argv)
+   end
+ 
+   #
+   # Same as #parse, but removes switches destructively.
+   # Non-option arguments remain in +argv+.
+   #
+-  def parse!(argv = default_argv, into: nil)
++  def parse!(argv = default_argv)
+     if ENV.include?('POSIXLY_CORRECT')
+-      order!(argv, into: into)
++      order!(argv)
+     else
+-      permute!(argv, into: into)
++      permute!(argv)
+     end
+   end
+ 
+@@ -1819,7 +1846,7 @@
+   octal = "0(?:[0-7]+(?:_[0-7]+)*|#{binary}|#{hex})?"
+   integer = "#{octal}|#{decimal}"
+ 
+-  accept(Integer, %r"\A[-+]?(?:#{integer})\z"io) {|s,|
++  accept(Integer, %r"\A[-+]?(?:#{integer})\z"i) {|s,|
+     begin
+       Integer(s)
+     rescue ArgumentError
+@@ -1831,7 +1858,7 @@
+   # Float number format, and converts to Float.
+   #
+   float = "(?:#{decimal}(?:\\.(?:#{decimal})?)?|\\.#{decimal})(?:E[-+]?#{decimal})?"
+-  floatpat = %r"\A[-+]?#{float}\z"io
++  floatpat = %r"\A[-+]?#{float}\z"i
+   accept(Float, floatpat) {|s,| s.to_f if s}
+ 
+   #
+@@ -1839,7 +1866,7 @@
+   # for float format, and Rational for rational format.
+   #
+   real = "[-+]?(?:#{octal}|#{float})"
+-  accept(Numeric, /\A(#{real})(?:\/(#{real}))?\z/io) {|s, d, n|
++  accept(Numeric, /\A(#{real})(?:\/(#{real}))?\z/i) {|s, d, n|
+     if n
+       Rational(d, n)
+     elsif s
+@@ -1850,7 +1877,7 @@
+   #
+   # Decimal integer format, to be converted to Integer.
+   #
+-  DecimalInteger = /\A[-+]?#{decimal}\z/io
++  DecimalInteger = /\A[-+]?#{decimal}\z/i
+   accept(DecimalInteger, DecimalInteger) {|s,|
+     begin
+       Integer(s)
+@@ -1863,7 +1890,7 @@
+   # Ruby/C like octal/hexadecimal/binary integer format, to be converted to
+   # Integer.
+   #
+-  OctalInteger = /\A[-+]?(?:[0-7]+(?:_[0-7]+)*|0(?:#{binary}|#{hex}))\z/io
++  OctalInteger = /\A[-+]?(?:[0-7]+(?:_[0-7]+)*|0(?:#{binary}|#{hex}))\z/i
+   accept(OctalInteger, OctalInteger) {|s,|
+     begin
+       Integer(s, 8)
+@@ -1903,7 +1930,7 @@
+   #
+   # List of strings separated by ",".
+   #
+-  accept(Array) do |s, |
++  accept(Array) do |s,|
+     if s
+       s = s.split(',').collect {|ss| ss unless ss.empty?}
+     end
+@@ -1934,7 +1961,7 @@
+   #
+   class ParseError < RuntimeError
+     # Reason which caused the error.
+-    Reason = 'parse error'.freeze
++    Reason = 'parse error'
+ 
+     def initialize(*args)
+       @args = args
+@@ -1954,7 +1981,9 @@
+ 
+     def self.filter_backtrace(array)
+       unless $DEBUG
+-        array.delete_if(&%r"\A#{Regexp.quote(__FILE__)}:"o.method(:=~))
++        array.delete_if do |item|
++          %r"\A#{Regexp.quote(__FILE__)}:" =~ item
++        end
+       end
+       array
+     end
+@@ -1997,42 +2026,42 @@
+   # Raises when ambiguously completable string is encountered.
+   #
+   class AmbiguousOption < ParseError
+-    const_set(:Reason, 'ambiguous option'.freeze)
++    const_set(:Reason, 'ambiguous option')
+   end
+ 
+   #
+   # Raises when there is an argument for a switch which takes no argument.
+   #
+   class NeedlessArgument < ParseError
+-    const_set(:Reason, 'needless argument'.freeze)
++    const_set(:Reason, 'needless argument')
+   end
+ 
+   #
+   # Raises when a switch with mandatory argument has no argument.
+   #
+   class MissingArgument < ParseError
+-    const_set(:Reason, 'missing argument'.freeze)
++    const_set(:Reason, 'missing argument')
+   end
+ 
+   #
+   # Raises when switch is undefined.
+   #
+   class InvalidOption < ParseError
+-    const_set(:Reason, 'invalid option'.freeze)
++    const_set(:Reason, 'invalid option')
+   end
+ 
+   #
+   # Raises when the given argument does not match required format.
+   #
+   class InvalidArgument < ParseError
+-    const_set(:Reason, 'invalid argument'.freeze)
++    const_set(:Reason, 'invalid argument')
+   end
+ 
+   #
+   # Raises when the given argument word can't be completed uniquely.
+   #
+   class AmbiguousArgument < InvalidArgument
+-    const_set(:Reason, 'ambiguous argument'.freeze)
++    const_set(:Reason, 'ambiguous argument')
+   end
+ 
+   #
+@@ -2073,8 +2102,8 @@
+       block_given? or return @optparse
+       begin
+         yield @optparse
+-      rescue ParseError
+-        @optparse.warn $!
++      rescue ParseError => e
++        @optparse.warn e
+         nil
+       end
+     end
+@@ -2117,8 +2146,9 @@
+     #
+     def self.extend_object(obj)
+       super
+-      obj.instance_eval {@optparse = nil}
++      obj.instance_variable_set :@optparse, nil
+     end
++
+     def initialize(*args)
+       super
+       @optparse = nil
+@@ -2136,7 +2166,6 @@
+   end
+ end
+ 
+-# ARGV is arguable by OptionParser
+-ARGV.extend(OptionParser::Arguable)
+ 
+-OptParse = OptionParser
++$/ = "\n" # input record separator
++
