@@ -16,13 +16,16 @@ class TestOptparse < MTest::Unit::TestCase
     end
 
     @o.on_head "--environment=ENVIRONMENT", @environments.keys,
-               "Set the environment you want to work with.",
-               "\n",
-               "Valid values:",
-               "  #{@environments.keys.join ', '}",
-               "\n",
-               "Defaults to production." do |environment|
+               "Set the environment you want to work with." do |environment|
       @configuration[:ENVIRONMENT] = environment
+    end
+
+    @o.on "--array=ITEMS", Array do |array|
+      @configuration[:ARRAY] = array
+    end
+
+    @o.on "--integer=INTEGER", Integer do |integer|
+      @configuration[:INTEGER] = integer
     end
 
     @o.banner = "Usage: mruby #{__FILE__} [OPTIONS]"
@@ -38,6 +41,24 @@ class TestOptparse < MTest::Unit::TestCase
     @o.parse '--clean'
 
     assert @configuration[:CLEANUP]
+  end
+
+  def test_parse_argument_conversion
+    @o.parse '--array=1,2,3'
+
+    assert_equal %w[1 2 3], @configuration[:ARRAY]
+  end
+
+  def test_parse_argument_validation
+    @o.parse '--integer=1'
+
+    assert_equal 1, @configuration[:INTEGER]
+  end
+
+  def test_parse_argument_validation_invalid
+    assert_raise OptionParser::InvalidArgument do
+      @o.parse '--integer=string'
+    end
   end
 
   def test_parse_value_completion
