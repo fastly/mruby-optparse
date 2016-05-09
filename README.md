@@ -2,6 +2,11 @@
 
 This is a port of OptionParser from CRuby.
 
+See [the CRuby OptionParser
+documentation](http://docs.ruby-lang.org/en/2.3.0/OptionParser.html) for usage
+documentation.  All features of CRuby OptionParser class should work except
+using the ARGV extensions.
+
 See [optparse.rb.diff](optparse.rb.diff) for the diff from CRuby's optparse
 (from Ruby 2.3.1-ish) to this port.
 
