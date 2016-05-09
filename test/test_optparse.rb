@@ -67,6 +67,14 @@ class TestOptparse < MTest::Unit::TestCase
     assert_equal 'production', @configuration[:ENVIRONMENT]
   end
 
+  def test_record_separator
+    assert_equal "\n", @o.record_separator
+
+    @o.record_separator = "\r\n"
+
+    assert_equal "\r\n", @o.record_separator
+  end
+
   def test_to_s
     help = @o.to_s
 

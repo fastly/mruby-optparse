@@ -4,8 +4,12 @@ This is a port of OptionParser from CRuby.
 
 See [the CRuby OptionParser
 documentation](http://docs.ruby-lang.org/en/2.3.0/OptionParser.html) for usage
-documentation.  All features of CRuby OptionParser class should work except
-using the ARGV extensions.
+documentation.  All base features of CRuby OptionParser class should work
+except using the ARGV extensions.  The additional acceptables you can require
+in CRuby (ac, shellwords, uri, date, time, version) are not included.
+
+This port of OptionParser provides OptionParser#record_separator as mruby does
+not provide `$/`.
 
 See [optparse.rb.diff](optparse.rb.diff) for the diff from CRuby's optparse
 (from Ruby 2.3.1-ish) to this port.

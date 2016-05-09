@@ -1079,6 +1079,7 @@ _arguments -s -S \
     @summary_width = width
     @summary_indent = indent
     @default_argv = ARGV
+    @record_separator = "\n"
     add_officious
     yield self if block_given?
   end
@@ -1151,6 +1152,9 @@ _arguments -s -S \
 
   # Strings to be parsed in default.
   attr_accessor :default_argv
+
+  # Default record separator ($/ in CRuby)
+  attr_accessor :record_separator
 
   #
   # Heading banner preceding summary.
@@ -1258,7 +1262,7 @@ _arguments -s -S \
   # +indent+:: Indentation, defaults to @summary_indent.
   #
   def summarize(to = [], width = @summary_width, max = width - 1, indent = @summary_indent, &blk)
-    blk ||= proc {|l| to << (l.index($/, -1) ? l : l + $/)}
+    blk ||= proc {|l| to << (l.index(@record_separator, -1) ? l : l + @record_separator)}
     visit(:summarize, {}, {}, width, max, indent, &blk)
     to
   end
@@ -2165,7 +2169,4 @@ _arguments -s -S \
     const_set(:DecimalNumeric, OptionParser::DecimalNumeric)
   end
 end
-
-
-$/ = "\n" # input record separator
 
