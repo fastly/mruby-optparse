@@ -66,7 +66,7 @@ end
 
 mruby_deps = Rake::FileList[
   BUILD_CONFIG_FILE,
-  'tmp',
+  'tmp/mruby',
   'mrblib/**/*',
 ]
 
