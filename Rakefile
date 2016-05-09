@@ -25,9 +25,7 @@ def mruby_rake *tasks
 end
 
 def mruby_bin *args
-  cd 'tmp/mruby' do
-    sh 'tmp/mruby/bin/mruby', *args
-  end
+  sh 'tmp/mruby/bin/mruby', *args
 end
 
 task test: %w[mruby] do
