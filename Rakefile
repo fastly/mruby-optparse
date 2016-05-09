@@ -46,7 +46,7 @@ file BUILD_CONFIG_FILE => 'tmp' do |t|
   build_config = <<-BUILD_CONFIG
 MRuby::Build.new do |conf|
   toolchain :gcc
-  
+
   conf.gembox 'default'
 
   conf.gem mgem: 'catch-throw'
