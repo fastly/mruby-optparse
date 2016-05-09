@@ -5,6 +5,8 @@ MRUBY_REPO        = 'https://github.com/mruby/mruby.git'
 
 CLOBBER << 'tmp'
 
+task default: :test
+
 def mruby_rake *tasks
   raise 'BUILD_CONFIG_FILE unset, add tmp/mruby_build_config.rb dependency' if
     BUILD_CONFIG_FILE.empty?
@@ -28,6 +30,8 @@ def mruby_bin *args
   sh 'tmp/mruby/bin/mruby', *args
 end
 
+
+desc 'Run tests with mruby'
 task test: %w[mruby] do
   mruby_bin 'test/test_optparse.rb'
 end
@@ -60,7 +64,13 @@ end
   File.write BUILD_CONFIG_FILE, build_config
 end
 
-file 'tmp/mruby/bin/mruby' => %W[#{BUILD_CONFIG_FILE} tmp/mruby] do
+mruby_deps = Rake::FileList[
+  BUILD_CONFIG_FILE,
+  'tmp',
+  'mrblib/**/*',
+]
+
+file 'tmp/mruby/bin/mruby' => mruby_deps do
   mruby_rake 'all'
 end
 
