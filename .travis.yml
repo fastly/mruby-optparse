@@ -1,2 +1,7 @@
+cache:
+  directories:
+    - tmp
+before_cache:
+  - "rake mruby"
 script:
   - "rake test"
