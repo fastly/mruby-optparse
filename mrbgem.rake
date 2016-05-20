@@ -6,4 +6,6 @@ MRuby::Gem::Specification.new('mruby-optparse') do |spec|
   spec.add_dependency 'mruby-env'
   spec.add_dependency 'mruby-onig-regexp'
   spec.add_dependency 'mruby-proc-ext'
+
+  spec.add_test_dependency 'mruby-mtest'
 end
