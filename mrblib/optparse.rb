@@ -1078,7 +1078,7 @@ _arguments -s -S \
     @banner = banner
     @summary_width = width
     @summary_indent = indent
-    @default_argv = ARGV
+    @default_argv = []
     @record_separator = "\n"
     add_officious
     yield self if block_given?
