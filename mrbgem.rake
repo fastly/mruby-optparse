@@ -5,4 +5,5 @@ MRuby::Gem::Specification.new('mruby-optparse') do |spec|
   spec.add_dependency 'mruby-catch-throw'
   spec.add_dependency 'mruby-env'
   spec.add_dependency 'mruby-onig-regexp'
+  spec.add_dependency 'mruby-proc-ext'
 end
