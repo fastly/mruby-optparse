@@ -1,5 +1,5 @@
 --- cruby/optparse.rb	2016-04-20 16:30:09.000000000 -0700
-+++ mrblib/optparse.rb	2016-05-05 16:50:50.000000000 -0700
++++ mruby/optparse.rb	2016-05-20 10:18:32.000000000 -0700
 @@ -393,9 +393,9 @@
  #
  class OptionParser
@@ -141,7 +141,36 @@
      }
      to << "  '*:file:_files' && return 0\n"
    end
-@@ -1351,7 +1373,9 @@
+@@ -1056,7 +1078,8 @@
+     @banner = banner
+     @summary_width = width
+     @summary_indent = indent
+-    @default_argv = ARGV
++    @default_argv = []
++    @record_separator = "\n"
+     add_officious
+     yield self if block_given?
+   end
+@@ -1130,6 +1153,9 @@
+   # Strings to be parsed in default.
+   attr_accessor :default_argv
+ 
++  # Default record separator ($/ in CRuby)
++  attr_accessor :record_separator
++
+   #
+   # Heading banner preceding summary.
+   #
+@@ -1236,7 +1262,7 @@
+   # +indent+:: Indentation, defaults to @summary_indent.
+   #
+   def summarize(to = [], width = @summary_width, max = width - 1, indent = @summary_indent, &blk)
+-    blk ||= proc {|l| to << (l.index($/, -1) ? l : l + $/)}
++    blk ||= proc {|l| to << (l.index(@record_separator, -1) ? l : l + @record_separator)}
+     visit(:summarize, {}, {}, width, max, indent, &blk)
+     to
+   end
+@@ -1351,7 +1377,9 @@
        if (!(String === o || Symbol === o)) and o.respond_to?(:match)
          pattern = notwice(o, pattern, 'pattern')
          if pattern.respond_to?(:convert)
@@ -152,7 +181,7 @@
          else
            conv = SPLAT_PROC
          end
-@@ -1360,14 +1384,16 @@
+@@ -1360,14 +1388,16 @@
  
        # anything others
        case o
@@ -171,7 +200,7 @@
          else
            raise ArgumentError, "argument pattern given twice"
          end
-@@ -1508,18 +1534,17 @@
+@@ -1508,18 +1538,17 @@
    #
    # Returns the rest of +argv+ left unparsed.
    #
@@ -194,7 +223,7 @@
    end
  
    def parse_in_order(argv = default_argv, setter = nil, &nonopt)  # :nodoc:
-@@ -1533,15 +1558,15 @@
+@@ -1533,15 +1562,15 @@
            opt, rest = $1, $2
            begin
              sw, = complete(:long, opt, true)
@@ -214,7 +243,7 @@
            end
  
          # short option
-@@ -1562,8 +1587,8 @@
+@@ -1562,8 +1591,8 @@
                  eq ||= !rest
                end
              end
@@ -225,7 +254,7 @@
            end
            begin
              opt, cb, val = sw.parse(val, argv) {|*exc| raise(*exc) if eq}
-@@ -1571,8 +1596,8 @@
+@@ -1571,8 +1600,8 @@
              argv.unshift(opt) if opt and (!rest or (opt = opt.sub(/\A-*/, '-')) != '-')
              val = cb.call(val) if cb
              setter.call(sw.switch_name, val) if setter
@@ -236,7 +265,7 @@
            end
  
          # non-option argument
-@@ -1600,18 +1625,20 @@
+@@ -1600,18 +1629,20 @@
    # Parses command line arguments +argv+ in permutation mode and returns
    # list of non-option arguments.
    #
@@ -261,7 +290,7 @@
      argv[0, 0] = nonopts
      argv
    end
-@@ -1620,20 +1647,20 @@
+@@ -1620,20 +1651,20 @@
    # Parses command line arguments +argv+ in order when environment variable
    # POSIXLY_CORRECT is set, and in permutation mode otherwise.
    #
@@ -287,7 +316,7 @@
      end
    end
  
-@@ -1819,7 +1846,7 @@
+@@ -1819,7 +1850,7 @@
    octal = "0(?:[0-7]+(?:_[0-7]+)*|#{binary}|#{hex})?"
    integer = "#{octal}|#{decimal}"
  
@@ -296,7 +325,7 @@
      begin
        Integer(s)
      rescue ArgumentError
-@@ -1831,7 +1858,7 @@
+@@ -1831,7 +1862,7 @@
    # Float number format, and converts to Float.
    #
    float = "(?:#{decimal}(?:\\.(?:#{decimal})?)?|\\.#{decimal})(?:E[-+]?#{decimal})?"
@@ -305,7 +334,7 @@
    accept(Float, floatpat) {|s,| s.to_f if s}
  
    #
-@@ -1839,7 +1866,7 @@
+@@ -1839,7 +1870,7 @@
    # for float format, and Rational for rational format.
    #
    real = "[-+]?(?:#{octal}|#{float})"
@@ -314,7 +343,7 @@
      if n
        Rational(d, n)
      elsif s
-@@ -1850,7 +1877,7 @@
+@@ -1850,7 +1881,7 @@
    #
    # Decimal integer format, to be converted to Integer.
    #
@@ -323,7 +352,7 @@
    accept(DecimalInteger, DecimalInteger) {|s,|
      begin
        Integer(s)
-@@ -1863,7 +1890,7 @@
+@@ -1863,7 +1894,7 @@
    # Ruby/C like octal/hexadecimal/binary integer format, to be converted to
    # Integer.
    #
@@ -332,7 +361,7 @@
    accept(OctalInteger, OctalInteger) {|s,|
      begin
        Integer(s, 8)
-@@ -1903,7 +1930,7 @@
+@@ -1903,7 +1934,7 @@
    #
    # List of strings separated by ",".
    #
@@ -341,7 +370,7 @@
      if s
        s = s.split(',').collect {|ss| ss unless ss.empty?}
      end
-@@ -1934,7 +1961,7 @@
+@@ -1934,7 +1965,7 @@
    #
    class ParseError < RuntimeError
      # Reason which caused the error.
@@ -350,7 +379,7 @@
  
      def initialize(*args)
        @args = args
-@@ -1954,7 +1981,9 @@
+@@ -1954,7 +1985,9 @@
  
      def self.filter_backtrace(array)
        unless $DEBUG
@@ -361,7 +390,7 @@
        end
        array
      end
-@@ -1997,42 +2026,42 @@
+@@ -1997,42 +2030,42 @@
    # Raises when ambiguously completable string is encountered.
    #
    class AmbiguousOption < ParseError
@@ -410,7 +439,7 @@
    end
  
    #
-@@ -2073,8 +2102,8 @@
+@@ -2073,8 +2106,8 @@
        block_given? or return @optparse
        begin
          yield @optparse
@@ -421,7 +450,7 @@
          nil
        end
      end
-@@ -2117,8 +2146,9 @@
+@@ -2117,8 +2150,9 @@
      #
      def self.extend_object(obj)
        super
@@ -432,13 +461,11 @@
      def initialize(*args)
        super
        @optparse = nil
-@@ -2136,7 +2166,6 @@
+@@ -2136,7 +2170,3 @@
    end
  end
  
 -# ARGV is arguable by OptionParser
 -ARGV.extend(OptionParser::Arguable)
- 
+-
 -OptParse = OptionParser
-+$/ = "\n" # input record separator
-+
