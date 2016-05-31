@@ -883,8 +883,8 @@ class OptionParser
           sum.concat(s.reverse)
         elsif !opt or opt.empty?
           sum << ""
-        elsif opt.respond_to?(:each_line)
-          sum.concat([*opt.each_line].reverse)
+        elsif opt.respond_to?(:lines)
+          sum.concat([*opt.lines].reverse)
         else
           sum.concat([*opt.each].reverse)
         end
